@@ -33,13 +33,19 @@ class mystream():
 	def streaming(self):
 		self.dev.start()
 		self.str = True
+		reading = Thread(target=self.keepread)
+		reading.start()
 		while self.str:
 			self.write2peer()
-			self.readfrompeer()
+		reading.join()
 		self.endcall()
 		self.dev.stop()
 		self.dev.abort()
 
+	def keepread(self):
+		while self.str:
+			self.readfrompeer()
+	
 	def readfrompeer(self):
 		data, addr = self.ss.recvfrom(self.buffer*8)
 		if data==b"endcall":
