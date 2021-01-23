@@ -3,6 +3,7 @@ import numpy
 from threading import Thread
 import socket
 import time
+import sys
 
 
 def b2addr(comb):
@@ -28,6 +29,8 @@ class mystream():
 		self.overflow = False
 		self.underflow = False
 		self.peer = None
+		self.uname = None
+		self.pname = None
 		self.est = False
 
 	def streaming(self):
@@ -49,7 +52,7 @@ class mystream():
 	def readfrompeer(self):
 		data, addr = self.ss.recvfrom(self.buffer*8)
 		if data==b"endcall":
-			print("your peer", self.peer, " exited")
+			print("your peer", self.pname, " exited")
 			self.str = False
 			return
 		data = b2v(data)
@@ -72,14 +75,25 @@ class mystream():
 		if key == '':
 			self.str = False
 
-	def request(self, host, port):
+	def request(self, uname, pname, host, port):
 		self.ss.bind(("", 0))
-		self.ss.sendto(b'0', (host, port))
+		self.uname=uname
+		self.pname=pname
+		self.ss.sendto((uname+"@"+pname).encode(), (host, port))
 		print("requesting to server")
 		self.conn()
 
 	def conn(self):
-		data, addr = self.ss.recvfrom(64)
+		while True:
+			data, addr = self.ss.recvfrom(64)
+			if data.decode()=="wrong request":
+				print("wrong request")
+				return
+			elif data.decode()=="server":
+				continue
+				#could put some connection timeout here, but i will leave it as loop now
+			else:
+				break
 		self.peer = b2addr(data)
 		sending = Thread(target=self.initping)
 		recving = Thread(target=self.getping)
@@ -87,7 +101,7 @@ class mystream():
 		recving.start()
 		sending.join()
 		recving.join()
-		print("You are connected to your peer ", self.peer)
+		print("You are connected to your peer ", self.pname, ":", self.peer)
 
 	def initping(self):
 		for i in range(50):
@@ -102,13 +116,19 @@ class mystream():
 			self.est = True
 		return
 
-
-
-a = mystream()
-a.request("192.168.0.10", 80)
-#stun server that i implemented
-#for git, see NAT-HOLE-PUNCH repo, stun server is there as name testserv.py
-stream = Thread(target=a.streaming)
-stream.start()
-a.get_input()
-stream.join()
+if __name__ == '__main__':
+	if len(sys.argv)<3:
+		print("usage: ./audioser.py from to")
+		print("from and to are user names")
+		sys.exit(1)
+	server = "192.168.0.10"
+	port = 80
+	uname = sys.argv[1]
+	pname = sys.argv[2]
+	a = mystream()
+	a.request(uname, pname, server, port)
+	#now the stun server is in this repo, name testserv
+	stream = Thread(target=a.streaming)
+	stream.start()
+	a.get_input()
+	stream.join()
